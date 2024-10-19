@@ -3,19 +3,39 @@
 layout(vertices = 4) out;
 uniform vec4 eyePos;
 
+float level(float z)
+{
+    return max(1, ((z + 100) * 18) / 50 + 12);
+}
+
+// Function to compute distance from camera to a point
+float distanceToEye(vec4 point, vec4 eyePos)
+{
+    return distance(point, eyePos);
+}
+
 void main()
 {
-    gl_out[gl_InvocationID].gl_Position
-      = gl_in[gl_InvocationID].gl_Position;
+    gl_out[gl_InvocationID].gl_Position = gl_in[gl_InvocationID].gl_Position;
 
-    vec4 centre = (gl_in[0].gl_Position + gl_in[1].gl_Position
-                 + gl_in[2].gl_Position + gl_in[3].gl_Position) * 0.25;
-    float dist = distance(eyePos, centre);
+    // Set tessellation levels based on distance from eye to edge vertices
+    float tessLevelEdge01 = level(distanceToEye(gl_in[0].gl_Position, eyePos) + 
+                                  distanceToEye(gl_in[1].gl_Position, eyePos));
+    float tessLevelEdge12 = level(distanceToEye(gl_in[1].gl_Position, eyePos) + 
+                                  distanceToEye(gl_in[2].gl_Position, eyePos));
+    float tessLevelEdge23 = level(distanceToEye(gl_in[2].gl_Position, eyePos) + 
+                                  distanceToEye(gl_in[3].gl_Position, eyePos));
+    float tessLevelEdge30 = level(distanceToEye(gl_in[3].gl_Position, eyePos) + 
+                                  distanceToEye(gl_in[0].gl_Position, eyePos));
 
-    gl_TessLevelOuter[0] = 6;
-    gl_TessLevelOuter[1] = 6;
-    gl_TessLevelOuter[2] = 6;
-    gl_TessLevelOuter[3] = 6;
-    gl_TessLevelInner[0] = 6;
-    gl_TessLevelInner[1] = 6;
+    // Set the outer tessellation levels to ensure consistency on shared edges
+    gl_TessLevelOuter[0] = tessLevelEdge01;   // Edge 0-1
+    gl_TessLevelOuter[1] = tessLevelEdge12;   // Edge 1-2
+    gl_TessLevelOuter[2] = tessLevelEdge23;   // Edge 2-3
+    gl_TessLevelOuter[3] = tessLevelEdge30;   // Edge 3-0
+
+    // Set inner tessellation levels based on the average distance
+    float avgDistance = (tessLevelEdge01 + tessLevelEdge12 + tessLevelEdge23 + tessLevelEdge30) / 4.0;
+    gl_TessLevelInner[0] = level(avgDistance);
+    gl_TessLevelInner[1] = level(avgDistance);
 }

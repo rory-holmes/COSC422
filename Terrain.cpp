@@ -17,13 +17,16 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include "loadTGA.h" 
 using namespace std;
-
+bool drone = false;
 GLuint vaoID;
 GLuint theProgram;
-GLuint mvpMatrixLoc, eyeLoc;
-float  eye_x = 0, eye_y = 20, eye_z = 30;      //Initial camera position
+GLuint mvpMatrixLoc, eyeLoc, gLoc, sLoc, wLoc, scaleLoc, lightLoc;
+float wScale, gScale, sScale;
+GLenum fill_line = GL_FILL;
+float lightAngle = 0;
+float eye_x = 0, eye_y = 20, eye_z = 30;      //Initial camera position
 float look_x = 0, look_y = 0, look_z = -40;    //"Look-at" point along -z direction
-float  theta = 0;                              //Look angle
+float theta = 0;                              //Look angle
 float toRad = 3.14159265/180.0;     //Conversion from degrees to rad
 
 float verts[100*3];       //10x10 grid (100 vertices)
@@ -66,16 +69,55 @@ void generateData()
 //Loads height map
 void loadTexture()
 {
-	GLuint texID;
-    glGenTextures(1, &texID);
+	GLuint texID[5];
+    glGenTextures(5, texID);
+
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, texID);
+    glBindTexture(GL_TEXTURE_2D, texID[0]);
 	loadTGA("Terrain_hm_01.tga");
+
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, texID[1]);
+	loadTGA("Terrain_hm_02.tga");
+
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	glActiveTexture(GL_TEXTURE2);
+	glBindTexture(GL_TEXTURE_2D, texID[2]);
+	loadTGA("Grass.tga");
+
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+
+	glActiveTexture(GL_TEXTURE3);
+	glBindTexture(GL_TEXTURE_2D, texID[3]);
+	loadTGA("Rock2.tga");
+
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+
+	glActiveTexture(GL_TEXTURE4);
+	glBindTexture(GL_TEXTURE_2D, texID[4]);
+	loadTGA("Water.tga");
 
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+
 
 }
 
@@ -108,6 +150,64 @@ GLuint loadShader(GLenum shaderType, string filename)
 	return shader;
 }
 
+void update(int _)
+{	
+	printf("drone: %d", drone);
+	if (drone) {
+		theta += 0.1;
+		glutPostRedisplay();
+	}
+
+	glutTimerFunc(50, update, 0);
+}
+
+
+float limitScale(float s)
+{
+	if (s < 0) s = 0;
+	if (s > 1) s = 1;
+	return s;
+}
+
+void keyInput(unsigned char key, int x, int y)
+{
+	if (key == ' ') {
+		if (fill_line == GL_FILL) fill_line = GL_LINE;
+		else fill_line = GL_FILL;
+	}
+	else if (key == 's') {
+		drone = !drone;
+	}
+	else if (key == 'a') {
+		lightAngle -= 3.14159 / 90;
+	}
+	else if (key == 'd') {
+		lightAngle += 3.14159 / 90;
+	}
+	else if (key == 'p') {
+		sScale += 0.01;
+
+	}
+	else if (key == 'l') {
+		sScale -= 0.01;
+		if (gScale > sScale - 0.1) {
+			if (sScale - 0.1 < wScale) gScale = wScale;
+			else gScale = sScale - 0.1;
+		}
+	}
+	else if (key == 'o') {
+		wScale += 0.01;
+	}
+	else if (key == 'k') {
+		wScale -= 0.01;
+	}
+	wScale = limitScale(wScale);
+	gScale = limitScale(gScale);
+	sScale = limitScale(sScale);
+
+	glutPostRedisplay();
+}
+
 //Initialise the shader program, create and load buffer data
 void initialise()
 {
@@ -118,12 +218,14 @@ void initialise()
 	GLuint shaderf = loadShader(GL_FRAGMENT_SHADER, "Terrain.frag");
 	GLuint shaderc = loadShader(GL_TESS_CONTROL_SHADER, "Terrain.cont");
 	GLuint shadere = loadShader(GL_TESS_EVALUATION_SHADER, "Terrains.eval");
+	GLuint shaderg = loadShader(GL_GEOMETRY_SHADER, "Terrain.geom");
 
 	GLuint program = glCreateProgram();
 	glAttachShader(program, shaderv);
 	glAttachShader(program, shaderf);
 	glAttachShader(program, shaderc);
 	glAttachShader(program, shadere);
+	glAttachShader(program, shaderg);
 
 	glLinkProgram(program);
 
@@ -140,12 +242,27 @@ void initialise()
 	}
 	glUseProgram(program);
 
+	gLoc = glGetUniformLocation(program, "grass");
+	glUniform1i(gLoc, 2);
+	gScale = 0.6;
+
+	sLoc = glGetUniformLocation(program, "snow");
+	glUniform1i(sLoc, 3);
+	sScale = 0.7;
+
+	wLoc = glGetUniformLocation(program, "water");
+	glUniform1i(wLoc, 4);
+	wScale = 0.25;
+
+	scaleLoc = glGetUniformLocation(program, "scale");
+	
+	lightLoc = glGetUniformLocation(program, "light");
+
 	mvpMatrixLoc = glGetUniformLocation(program, "mvpMatrix");
 	eyeLoc = glGetUniformLocation(program, "eyePos");
 
 	GLuint texLoc = glGetUniformLocation(program, "heightMap");
 	glUniform1i(texLoc, 0);
-//-----------------------------------------------
 
 //---------Load buffer data-----------------------
 	generateData();
@@ -172,6 +289,8 @@ void initialise()
 	glEnable(GL_CULL_FACE);
 	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+
+	glutKeyboardFunc(keyInput);
 }
 
 //Display function to compute uniform values based on transformation parameters and to draw the scene
@@ -180,13 +299,21 @@ void display()
 	glm::vec4 cameraPosn = glm::vec4(eye_x, eye_y, eye_z, 1.0);
 	glUniform4fv(eyeLoc, 1, &cameraPosn[0]);
 
+	
 	//--------Compute matrices----------------------
 	glm::mat4 proj = glm::perspective(30.0f * toRad, 1.25f, 20.0f, 500.0f);  //perspective projection matrix
 	glm::mat4 view = lookAt(glm::vec3(eye_x, eye_y, eye_z), glm::vec3(look_x, look_y, look_z), glm::vec3(0.0, 1.0, 0.0)); //view matri
 	projView = proj * view;  //Product matrix
 	glUniformMatrix4fv(mvpMatrixLoc, 1, GL_FALSE, &projView[0][0]);
+	
+	glm::vec3 scale = glm::vec3(wScale, gScale, sScale);
+	glUniform3fv(scaleLoc, 1, &scale[0]);
+
+	glm::vec4 light = normalize(glm::vec4(50 * sin(lightAngle), 50 * cos(lightAngle), -50, 0));
+	glUniform4fv(lightLoc, 1, &light[0]);
 
 	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+	glPolygonMode(GL_FRONT_AND_BACK, fill_line);
 	glBindVertexArray(vaoID);
 	glDrawElements(GL_PATCHES, 81 * 4, GL_UNSIGNED_SHORT, NULL);
 	glFlush();
@@ -198,8 +325,8 @@ void special(int key, int x, int y)
 	float dir_x, dir_z;
 	if (key == GLUT_KEY_LEFT) theta += 0.1;   //in radians
 	else if (key == GLUT_KEY_RIGHT) theta -= 0.1;
-	else if (key == GLUT_KEY_DOWN) step = -1;
-	else if (key == GLUT_KEY_UP) step = 1;
+	else if (key == GLUT_KEY_DOWN) step = -5;
+	else if (key == GLUT_KEY_UP) step = 5;
 	dir_x = -sin(theta);
 	dir_z = -cos(theta);
 	eye_x += step * 0.1 * dir_x;
@@ -233,6 +360,7 @@ int main(int argc, char** argv)
 	initialise();
 	glutDisplayFunc(display); 
 	glutSpecialFunc(special);
+	glutTimerFunc(50, update, 0);
 	glutMainLoop();
 	return 0;
 }
